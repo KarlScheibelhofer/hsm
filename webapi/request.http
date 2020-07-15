@@ -42,3 +42,7 @@ POST http://localhost:8080/keys/13 HTTP/1.1
 content-type: application/json
 
 ###
+
+GET http://localhost:8080/keys/456
+
+###
