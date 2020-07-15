@@ -1,0 +1,44 @@
+GET http://localhost:8080/keys HTTP/1.1
+
+###
+
+GET http://localhost:8080/keys/1
+
+###
+
+POST http://localhost:8080/keys HTTP/1.1
+content-type: application/json
+
+{
+    "id": "47",
+    "type": "ec-p256"
+}
+
+###
+
+GET http://localhost:8080/keys/47
+
+###
+
+
+DELETE http://localhost:8080/keys/47 HTTP/1.1
+
+###
+
+POST http://localhost:8080/keys/53 HTTP/1.1
+content-type: application/json
+
+{
+    "type": "ec-p256"
+}
+
+###
+
+GET http://localhost:8080/keys/53
+
+###
+
+POST http://localhost:8080/keys/13 HTTP/1.1
+content-type: application/json
+
+###
