@@ -55,6 +55,7 @@ func TestSuite(t *testing.T) {
 	t.Run("GetKey", SubTestGetKey)
 	t.Run("GenerateNewKey", SubTestGenerateNewKey)
 	t.Run("ListKeys", SubTestListKeys)
+	t.Run("DeleteKeys", SubTestDeleteKeys)
 
 	// <tear-down cod
 }
@@ -137,4 +138,16 @@ func SubTestListKeys(t *testing.T) {
 			return nil
 		}).
 		Done()
+}
+
+func SubTestDeleteKeys(t *testing.T) {
+	keyIDList := []string{"456", "789"}
+	for _, id := range keyIDList {
+		resourcePath := "/keys/" + id
+		test.Delete(resourcePath).
+			Expect(t).
+			Status(204).
+			BodyLength(0).
+			Done()
+	}
 }

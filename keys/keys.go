@@ -3,6 +3,7 @@ package keys
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"regexp"
 
 	"crypto/ecdsa"
@@ -168,24 +169,25 @@ func ListKeys(c *gin.Context) {
 	c.JSON(http.StatusOK, keyList)
 }
 
-// func DeleteKey(w http.ResponseWriter, r *http.Request) {
-// 	vars := mux.Vars(r)
-// 	keyId := vars["keyId"]
-// 	log.WithFields(log.Fields{
-// 		"keyId": keyId,
-// 	}).Info("Delete key")
+//DeleteKey deletes one specific key by ID
+func DeleteKey(c *gin.Context) {
+	keyID := c.Param("id")
 
-// 	file := "key-" + keyId
-// 	if _, err := os.Stat(file); os.IsNotExist(err) {
-// 		writeJsonError(err, http.StatusNotFound, w)
-// 		return
-// 	}
-// 	err := os.Remove(file)
-// 	if err != nil {
-// 		writeJsonError(err, http.StatusInternalServerError, w)
-// 		return
-// 	}
-// }
+	log.WithFields(log.Fields{"id": keyID}).Info("Delete key")
+
+	file := "key-" + keyID
+	if _, err := os.Stat(file); os.IsNotExist(err) {
+		writeJSONError(err, http.StatusNotFound, c)
+		return
+	}
+	err := os.Remove(file)
+	if err != nil {
+		writeJSONError(err, http.StatusInternalServerError, c)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
 
 //GenerateKey generates a new key with ID specified as parameter.
 func GenerateKey(c *gin.Context) {

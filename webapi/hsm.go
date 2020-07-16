@@ -40,6 +40,7 @@ func setupRouter() *gin.Engine {
 	router.POST("/keys/:id", keys.GenerateKey)
 	router.GET("/keys/:id", keys.GetKey)
 	router.GET("/keys", keys.ListKeys)
+	router.DELETE("/keys/:id", keys.DeleteKey)
 
 	return router
 }
