@@ -3,6 +3,7 @@ package keys
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -132,45 +133,40 @@ func GetKey(c *gin.Context) {
 	}
 }
 
-// func ListKeys(w http.ResponseWriter, r *http.Request) {
-// 	log.Info("Listing keys")
-// 	fileInfos, err := ioutil.ReadDir(".")
-// 	if err != nil {
-// 		writeJsonError(err, http.StatusNotFound, w)
-// 		return
-// 	}
-// 	var keyList []Key
-// 	fileRegex := regexp.MustCompile("key-[0-9]+")
-// 	for _, info := range fileInfos {
-// 		if !info.IsDir() {
-// 			filename := info.Name()
-// 			matches := fileRegex.MatchString(filename)
-// 			if matches {
-// 				key, err := readKey(filename)
-// 				if err == nil {
-// 					log.WithFields(log.Fields{
-// 						"keyId": key.Id,
-// 					}).Debug("Found key")
-// 					key.Links = []Link{
-// 						{
-// 							Rel:  "self",
-// 							Href: r.RequestURI + "/" + key.Id,
-// 						},
-// 					}
-// 					keyList = append(keyList, key)
-// 				}
-// 			}
-// 		}
-// 	}
+//ListKeys return all existing keys as array
+func ListKeys(c *gin.Context) {
+	log.Info("Listing keys")
+	fileInfos, err := ioutil.ReadDir(".")
+	if err != nil {
+		writeJSONError(err, http.StatusNotFound, c)
+		return
+	}
+	var keyList []Key
+	fileRegex := regexp.MustCompile("key-[0-9]+")
+	for _, info := range fileInfos {
+		if !info.IsDir() {
+			filename := info.Name()
+			matches := fileRegex.MatchString(filename)
+			if matches {
+				key, err := readKey(filename)
+				if err == nil {
+					log.WithFields(log.Fields{
+						"keyId": key.ID,
+					}).Debug("Found key")
+					key.Links = []Link{
+						{
+							Rel:  "self",
+							Href: c.Request.RequestURI + "/" + key.ID,
+						},
+					}
+					keyList = append(keyList, key)
+				}
+			}
+		}
+	}
 
-// 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-// 	encoder := json.NewEncoder(w)
-// 	encoder.SetIndent("", "\t")
-// 	if err := encoder.Encode(keyList); err != nil {
-// 		writeJsonError(err, http.StatusInternalServerError, w)
-// 		return
-// 	}
-// }
+	c.JSON(http.StatusOK, keyList)
+}
 
 // func DeleteKey(w http.ResponseWriter, r *http.Request) {
 // 	vars := mux.Vars(r)

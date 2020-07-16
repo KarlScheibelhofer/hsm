@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"testing"
 
 	"github.com/karlscheibelhofer/hsm/keys"
@@ -30,20 +31,11 @@ var schemaGeneratedKey string = `{
 	"title": "Test GenerateKey Schema",
 	"type": "object",
 	"properties": {
-	"id": { "type": "string" },
-	"type": { "type": "string" },
-	"private": {
-		"type": "string",
-		"pattern": "^[0-9a-zA-Z/+]*={0,3}$"
-	},
-	"public": {
-		"type": "string",
-		"pattern": "^[0-9a-zA-Z/+]*={0,3}$"
-	},
-	"nonce": {
-		"type": "string",
-		"pattern": "^[0-9a-zA-Z/+]*={0,3}$"
-	}
+		"id": { "type": "string" },
+		"type": { "type": "string" },
+		"private": { "type": "string", "pattern": "^[0-9a-zA-Z/+]*={0,3}$" },
+		"public": { "type": "string",	"pattern": "^[0-9a-zA-Z/+]*={0,3}$"	},
+		"nonce": { "type": "string", "pattern": "^[0-9a-zA-Z/+]*={0,3}$" }
 	},
 	"required": [ "id", "type", "private", "public", "nonce" ]
 }`
@@ -62,6 +54,7 @@ func TestSuite(t *testing.T) {
 	t.Run("GenerateKey", SubTestGenerateKey)
 	t.Run("GetKey", SubTestGetKey)
 	t.Run("GenerateNewKey", SubTestGenerateNewKey)
+	t.Run("ListKeys", SubTestListKeys)
 
 	// <tear-down cod
 }
@@ -121,6 +114,25 @@ func SubTestGenerateNewKey(t *testing.T) {
 			expectedID := keyID
 			if resKey.ID != expectedID {
 				return errors.New("expected key ID " + expectedID + " but was " + resKey.ID)
+			}
+			return nil
+		}).
+		Done()
+}
+
+func SubTestListKeys(t *testing.T) {
+	collectionPath := "/keys"
+
+	test.Get(collectionPath).
+		Expect(t).
+		Status(200).
+		Type("json").
+		AssertFunc(func(res *http.Response, req *http.Request) error {
+			var resKeyAr []keys.Key
+			json.NewDecoder(res.Body).Decode(&resKeyAr)
+			expectedArrayLen := 2
+			if len(resKeyAr) != expectedArrayLen {
+				return errors.New("expected key list length " + strconv.Itoa(expectedArrayLen) + " but was " + strconv.Itoa(len(resKeyAr)))
 			}
 			return nil
 		}).
