@@ -1,28 +1,19 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"testing"
 
 	"github.com/karlscheibelhofer/hsm/keys"
 
+	logger "github.com/izumin5210/gentleman-logger"
+
 	"gopkg.in/h2non/baloo.v3"
 )
-
-func toJSONReader(value interface{}) (io.Reader, error) {
-	b := new(bytes.Buffer)
-	err := json.NewEncoder(b).Encode(value)
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
-}
 
 var serverAddress string
 var test *baloo.Client
@@ -50,6 +41,7 @@ func TestSuite(t *testing.T) {
 	defer testServer.Close()
 	serverAddress = testServer.Addr
 	test = baloo.New("http://" + serverAddress)
+	test.Use(logger.New(os.Stdout))
 
 	t.Run("GenerateKey", SubTestGenerateKey)
 	t.Run("GetKey", SubTestGetKey)

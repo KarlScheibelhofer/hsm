@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/karlscheibelhofer/hsm"
 	"github.com/karlscheibelhofer/hsm/keys"
+	"github.com/karlscheibelhofer/hsm/p11"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -41,6 +42,8 @@ func setupRouter() *gin.Engine {
 	router.GET("/keys/:id", keys.GetKey)
 	router.GET("/keys", keys.ListKeys)
 	router.DELETE("/keys/:id", keys.DeleteKey)
+
+	router.POST("/hsm/:id/sign", p11.Sign)
 
 	return router
 }
