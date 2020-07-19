@@ -1,8 +1,20 @@
 package main
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"math/big"
+	"net/http"
 	"os"
-	"strings"
 	"testing"
 
 	logger "github.com/izumin5210/gentleman-logger"
@@ -11,6 +23,8 @@ import (
 
 // var serverAddress string
 // var test *baloo.Client
+
+var data []byte = ([]byte("1234567890abcdef1234567890abcdef"))[:]
 
 func TestSuitePkcs11(t *testing.T) {
 	// <setup code>
@@ -29,14 +43,63 @@ func TestSuitePkcs11(t *testing.T) {
 	// <tear-down cod
 }
 
+func assertSignatureValid(res *http.Response, req *http.Request) error {
+
+	var responseBody map[string]interface{}
+	json.NewDecoder(res.Body).Decode(&responseBody)
+
+	sigValueB64 := responseBody["value"]
+
+	sigValue, err := base64.StdEncoding.DecodeString(sigValueB64.(string))
+	if err != nil {
+		return err
+	}
+	// split value into two halves r and s
+	sigLen := len(sigValue)
+	r, s := sigValue[:sigLen/2], sigValue[sigLen/2:]
+
+	pemEncodedKey, err := ioutil.ReadFile("../key-1-ec-p256-public.pem")
+	if err != nil {
+		return errors.New("failed to read key file: " + err.Error())
+	}
+	encodedKey, _ := pem.Decode(pemEncodedKey)
+	if encodedKey == nil {
+		return errors.New("failed to parse PEM block containing the key")
+	}
+
+	pubKey, err := x509.ParsePKIXPublicKey(encodedKey.Bytes)
+	if err != nil {
+		return errors.New("failed to parse key: " + err.Error())
+	}
+
+	hash := sha256.Sum256(data)
+
+	switch pub := pubKey.(type) {
+	case *rsa.PublicKey:
+		fmt.Println("pub is of type RSA:", pub)
+	case *ecdsa.PublicKey:
+		fmt.Println("pub is of type ECDSA:", pub)
+	default:
+		return errors.New("unknown type of public key")
+	}
+
+	valid := ecdsa.Verify(pubKey.(*ecdsa.PublicKey), hash[:], new(big.Int).SetBytes(r), new(big.Int).SetBytes(s))
+	if !valid {
+		return errors.New("signature verification failed ")
+	}
+	return nil
+}
+
 func SubTestSign(t *testing.T) {
 	keyID := "1"
 	resourcePath := "/hsm/" + keyID + "/sign"
-	data := "1234567890abcdef1234567890abcdef"
+
+	hash := sha256.Sum256(data)
 
 	test.Post(resourcePath).
-		Body(strings.NewReader(data)).
+		Body(bytes.NewReader(hash[:])).
 		Expect(t).
 		Status(200).
+		AssertFunc(assertSignatureValid).
 		Done()
 }

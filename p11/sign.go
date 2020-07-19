@@ -67,8 +67,15 @@ func init() {
 	module.FindObjectsFinal(globalSession)
 }
 
-type signature struct {
+//Signature holds a signature value
+type Signature struct {
 	Value []byte `json:"value,omitempty"`
+}
+
+//ECSignature holds EC signature components r and s
+type ECSignature struct {
+	R []byte `json:"r,omitempty"`
+	S []byte `json:"s,omitempty"`
 }
 
 //Sign creates a signature
@@ -93,7 +100,7 @@ func Sign(c *gin.Context) {
 		if err != nil {
 			panic(err)
 		}
-		sig := signature{
+		sig := Signature{
 			Value: sigVal,
 		}
 		c.JSON(http.StatusOK, sig)
