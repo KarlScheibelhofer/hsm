@@ -14,3 +14,14 @@ openssl ec -in key-1-ec-p256.pem -pubout -out key-1-ec-p256-public.pem
 openssl asn1parse -in key-1-ec-p256.pem
 softhsm2-util --import key-1-ec-p256.pem --slot 2143836342 --label "key-1" --id 01 --pin 1234 
 ```
+
+```
+openssl dgst -sha256 -sign key-1-ec-p256.pem -out signature.bin data
+openssl dgst -sha256 -verify key-1-ec-p256-public.pem -signature signature.bin data
+dumpasn1 signature.bin
+```
+
+```
+dumpasn1 webapi/test-signature.bin
+openssl dgst -sha256 -verify key-1-ec-p256-public.pem -signature webapi/test-signature.bin data
+```

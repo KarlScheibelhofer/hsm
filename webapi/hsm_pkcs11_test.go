@@ -6,7 +6,8 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base64"
+	"encoding/asn1"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -17,14 +18,25 @@ import (
 	"os"
 	"testing"
 
+	"github.com/karlscheibelhofer/hsm/p11"
+
 	logger "github.com/izumin5210/gentleman-logger"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/h2non/baloo.v3"
 )
 
 // var serverAddress string
 // var test *baloo.Client
 
-var data []byte = ([]byte("1234567890abcdef1234567890abcdef"))[:]
+var data []byte = []byte{
+	0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0x0, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+	0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0x0, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+}
+
+type Asn1ECSignature struct {
+	R *big.Int
+	S *big.Int
+}
 
 func TestSuitePkcs11(t *testing.T) {
 	// <setup code>
@@ -45,18 +57,9 @@ func TestSuitePkcs11(t *testing.T) {
 
 func assertSignatureValid(res *http.Response, req *http.Request) error {
 
-	var responseBody map[string]interface{}
-	json.NewDecoder(res.Body).Decode(&responseBody)
-
-	sigValueB64 := responseBody["value"]
-
-	sigValue, err := base64.StdEncoding.DecodeString(sigValueB64.(string))
-	if err != nil {
-		return err
-	}
-	// split value into two halves r and s
-	sigLen := len(sigValue)
-	r, s := sigValue[:sigLen/2], sigValue[sigLen/2:]
+	var signature p11.ECSignature
+	json.NewDecoder(res.Body).Decode(&signature)
+	log.WithFields(log.Fields{"r": hex.EncodeToString(signature.R), "s": hex.EncodeToString(signature.S)}).Info("signature")
 
 	pemEncodedKey, err := ioutil.ReadFile("../key-1-ec-p256-public.pem")
 	if err != nil {
@@ -73,6 +76,7 @@ func assertSignatureValid(res *http.Response, req *http.Request) error {
 	}
 
 	hash := sha256.Sum256(data)
+	log.WithFields(log.Fields{"value": hex.EncodeToString(hash[:])}).Info("hash")
 
 	switch pub := pubKey.(type) {
 	case *rsa.PublicKey:
@@ -83,10 +87,18 @@ func assertSignatureValid(res *http.Response, req *http.Request) error {
 		return errors.New("unknown type of public key")
 	}
 
-	valid := ecdsa.Verify(pubKey.(*ecdsa.PublicKey), hash[:], new(big.Int).SetBytes(r), new(big.Int).SetBytes(s))
+	r := new(big.Int).SetBytes(signature.R)
+	s := new(big.Int).SetBytes(signature.S)
+	valid := ecdsa.Verify(pubKey.(*ecdsa.PublicKey), hash[:], r, s)
 	if !valid {
 		return errors.New("signature verification failed ")
 	}
+	encodedSig, err := asn1.Marshal(Asn1ECSignature{R: r, S: s})
+	if err != nil {
+		return errors.New("failed encode signature: " + err.Error())
+	}
+	ioutil.WriteFile("data.bin", data, 0644)
+	ioutil.WriteFile("test-signature.bin", encodedSig, 0644)
 	return nil
 }
 

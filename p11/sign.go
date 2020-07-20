@@ -1,6 +1,7 @@
 package p11
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -14,6 +15,17 @@ var module *pkcs11.Ctx
 var slot uint
 var globalSession pkcs11.SessionHandle
 var keyHandles map[string]pkcs11.ObjectHandle
+
+//Signature holds a signature value
+type Signature struct {
+	Value []byte `json:"value,omitempty"`
+}
+
+//ECSignature holds EC signature components r and s
+type ECSignature struct {
+	R []byte `json:"r,omitempty"`
+	S []byte `json:"s,omitempty"`
+}
 
 func init() {
 	module = pkcs11.New("/usr/lib/softhsm/libsofthsm2.so")
@@ -67,17 +79,6 @@ func init() {
 	module.FindObjectsFinal(globalSession)
 }
 
-//Signature holds a signature value
-type Signature struct {
-	Value []byte `json:"value,omitempty"`
-}
-
-//ECSignature holds EC signature components r and s
-type ECSignature struct {
-	R []byte `json:"r,omitempty"`
-	S []byte `json:"s,omitempty"`
-}
-
 //Sign creates a signature
 func Sign(c *gin.Context) {
 	keyID := c.Param("id")
@@ -87,6 +88,7 @@ func Sign(c *gin.Context) {
 	}
 
 	log.WithFields(log.Fields{"id": keyID}).Info("Sign with key")
+	log.WithFields(log.Fields{"hash": hex.EncodeToString(requestData)}).Info("hash to sign")
 
 	label := "key-" + keyID
 	if handle, exists := keyHandles[label]; exists {
@@ -100,11 +102,19 @@ func Sign(c *gin.Context) {
 		if err != nil {
 			panic(err)
 		}
-		sig := Signature{
-			Value: sigVal,
-		}
+		log.WithFields(log.Fields{"value": hex.EncodeToString(sigVal)}).Info("signature")
+
+		sig := createECSignature(sigVal)
 		c.JSON(http.StatusOK, sig)
 	} else {
 		c.Status(http.StatusNotFound)
 	}
+}
+
+func createECSignature(val []byte) ECSignature {
+	// split value into two halves r and s
+	len := len(val)
+	r, s := val[:len/2], val[len/2:]
+	log.WithFields(log.Fields{"r": hex.EncodeToString(r), "s": hex.EncodeToString(s)}).Info("signature")
+	return ECSignature{R: r, S: s}
 }
