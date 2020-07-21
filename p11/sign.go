@@ -1,9 +1,12 @@
 package p11
 
 import (
+	"encoding/asn1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -21,10 +24,10 @@ type Signature struct {
 	Value []byte `json:"value,omitempty"`
 }
 
-//ECSignature holds EC signature components r and s
+//ECSignature holds EC signature components r and s for ASN.1 encoding
 type ECSignature struct {
-	R []byte `json:"r,omitempty"`
-	S []byte `json:"s,omitempty"`
+	R *big.Int
+	S *big.Int
 }
 
 func init() {
@@ -88,7 +91,7 @@ func Sign(c *gin.Context) {
 	}
 
 	log.WithFields(log.Fields{"id": keyID}).Info("Sign with key")
-	log.WithFields(log.Fields{"hash": hex.EncodeToString(requestData)}).Info("hash to sign")
+	log.WithFields(log.Fields{"hash": hex.EncodeToString(requestData)}).Debug("hash to sign")
 
 	label := "key-" + keyID
 	if handle, exists := keyHandles[label]; exists {
@@ -102,7 +105,7 @@ func Sign(c *gin.Context) {
 		if err != nil {
 			panic(err)
 		}
-		log.WithFields(log.Fields{"value": hex.EncodeToString(sigVal)}).Info("signature")
+		log.WithFields(log.Fields{"value": hex.EncodeToString(sigVal)}).Debug("signature")
 
 		sig := createECSignature(sigVal)
 		c.JSON(http.StatusOK, sig)
@@ -111,10 +114,15 @@ func Sign(c *gin.Context) {
 	}
 }
 
-func createECSignature(val []byte) ECSignature {
+func createECSignature(val []byte) Signature {
 	// split value into two halves r and s
 	len := len(val)
 	r, s := val[:len/2], val[len/2:]
 	log.WithFields(log.Fields{"r": hex.EncodeToString(r), "s": hex.EncodeToString(s)}).Info("signature")
-	return ECSignature{R: r, S: s}
+	ecSig := ECSignature{R: new(big.Int).SetBytes(r), S: new(big.Int).SetBytes(s)}
+	encodedSig, err := asn1.Marshal(ecSig)
+	if err != nil {
+		panic(errors.New("failed encode signature: " + err.Error()))
+	}
+	return Signature{Value: encodedSig}
 }

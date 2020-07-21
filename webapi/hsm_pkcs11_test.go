@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"net/http"
 	"os"
 	"testing"
@@ -31,11 +30,6 @@ import (
 var data []byte = []byte{
 	0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0x0, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
 	0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0x0, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
-}
-
-type Asn1ECSignature struct {
-	R *big.Int
-	S *big.Int
 }
 
 func TestSuitePkcs11(t *testing.T) {
@@ -57,9 +51,9 @@ func TestSuitePkcs11(t *testing.T) {
 
 func assertSignatureValid(res *http.Response, req *http.Request) error {
 
-	var signature p11.ECSignature
+	var signature p11.Signature
 	json.NewDecoder(res.Body).Decode(&signature)
-	log.WithFields(log.Fields{"r": hex.EncodeToString(signature.R), "s": hex.EncodeToString(signature.S)}).Info("signature")
+	log.WithFields(log.Fields{"value": signature.Value}).Info("signature")
 
 	pemEncodedKey, err := ioutil.ReadFile("../key-1-ec-p256-public.pem")
 	if err != nil {
@@ -87,18 +81,17 @@ func assertSignatureValid(res *http.Response, req *http.Request) error {
 		return errors.New("unknown type of public key")
 	}
 
-	r := new(big.Int).SetBytes(signature.R)
-	s := new(big.Int).SetBytes(signature.S)
-	valid := ecdsa.Verify(pubKey.(*ecdsa.PublicKey), hash[:], r, s)
+	var ecSig p11.ECSignature
+	_, err = asn1.Unmarshal(signature.Value, &ecSig)
+	if err != nil {
+		return errors.New("failed to parse ASN.1 EC signature: " + err.Error())
+	}
+	valid := ecdsa.Verify(pubKey.(*ecdsa.PublicKey), hash[:], ecSig.R, ecSig.S)
 	if !valid {
 		return errors.New("signature verification failed ")
 	}
-	encodedSig, err := asn1.Marshal(Asn1ECSignature{R: r, S: s})
-	if err != nil {
-		return errors.New("failed encode signature: " + err.Error())
-	}
 	ioutil.WriteFile("data.bin", data, 0644)
-	ioutil.WriteFile("test-signature.bin", encodedSig, 0644)
+	ioutil.WriteFile("test-signature.bin", signature.Value, 0644)
 	return nil
 }
 
