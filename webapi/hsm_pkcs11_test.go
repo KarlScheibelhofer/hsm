@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/asn1"
@@ -45,6 +47,7 @@ func TestSuitePkcs11(t *testing.T) {
 	test.Use(logger.New(os.Stdout))
 
 	t.Run("Sign", SubTestSign)
+	t.Run("Decrypt", SubTestDecrypt)
 
 	// <tear-down cod
 }
@@ -107,4 +110,73 @@ func SubTestSign(t *testing.T) {
 		Status(200).
 		AssertFunc(assertSignatureValid).
 		Done()
+}
+
+func encryptData(plaintext []byte) ([]byte, error) {
+	pemEncodedKey, err := ioutil.ReadFile("../key-2-rsa-2048-public.pem")
+	if err != nil {
+		return nil, errors.New("failed to read key file: " + err.Error())
+	}
+	encodedKey, _ := pem.Decode(pemEncodedKey)
+	if encodedKey == nil {
+		return nil, errors.New("failed to parse PEM block containing the key")
+	}
+
+	pubKey, err := x509.ParsePKIXPublicKey(encodedKey.Bytes)
+	if err != nil {
+		return nil, errors.New("failed to parse key: " + err.Error())
+	}
+
+	switch pub := pubKey.(type) {
+	case *rsa.PublicKey:
+		fmt.Println("pub is of type RSA:", pub)
+	case *ecdsa.PublicKey:
+		return nil, errors.New("unsupported type EC of public key")
+	default:
+		return nil, errors.New("unknown type of public key")
+	}
+
+	rng := rand.Reader
+	var label []byte = nil
+
+	ciphertext, err := rsa.EncryptOAEP(sha1.New(), rng, pubKey.(*rsa.PublicKey), plaintext, label)
+	if err != nil {
+		return nil, err
+	}
+
+	ioutil.WriteFile("plaintext.bin", data, 0644)
+	ioutil.WriteFile("test-ciphertext.bin", ciphertext, 0644)
+	return ciphertext, nil
+}
+
+func SubTestDecrypt(t *testing.T) {
+	keyID := "2"
+	resourcePath := "/hsm/" + keyID + "/decrypt"
+
+	plaintext := data
+	ciphertext, err := encryptData(plaintext)
+	if err != nil {
+		t.Error("preparing encrypted data failed " + err.Error())
+	}
+
+	test.Post(resourcePath).
+		Body(bytes.NewReader(ciphertext)).
+		Expect(t).
+		Status(200).
+		AssertFunc(assertDecryption(plaintext)).
+		Done()
+}
+
+func assertDecryption(expectedPlaintext []byte) func(res *http.Response, req *http.Request) error {
+	f := func(res *http.Response, req *http.Request) error {
+		var plaintext p11.Plaintext
+		json.NewDecoder(res.Body).Decode(&plaintext)
+		log.WithFields(log.Fields{"value": plaintext.Value}).Info("plaintext")
+
+		if bytes.Equal(expectedPlaintext, plaintext.Value) == false {
+			return errors.New("expected plaintext and response body differ")
+		}
+		return nil
+	}
+	return f
 }

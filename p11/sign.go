@@ -30,6 +30,11 @@ type ECSignature struct {
 	S *big.Int
 }
 
+//Plaintext holds a plaintext value
+type Plaintext struct {
+	Value []byte `json:"value,omitempty"`
+}
+
 func init() {
 	module = pkcs11.New("/usr/lib/softhsm/libsofthsm2.so")
 	err := module.Initialize()
@@ -82,7 +87,7 @@ func init() {
 	module.FindObjectsFinal(globalSession)
 }
 
-//Sign creates a signature
+//Sign creates a signature with ECDSA
 func Sign(c *gin.Context) {
 	keyID := c.Param("id")
 	requestData, err := ioutil.ReadAll(c.Request.Body)
@@ -95,12 +100,15 @@ func Sign(c *gin.Context) {
 
 	label := "key-" + keyID
 	if handle, exists := keyHandles[label]; exists {
-		session, err := module.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
+		session, err := module.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION)
 		if err != nil {
 			panic(err)
 		}
 		defer module.CloseSession(session)
-		module.SignInit(session, []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA, nil)}, handle)
+		err = module.SignInit(session, []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA, nil)}, handle)
+		if err != nil {
+			panic(err)
+		}
 		sigVal, err := module.Sign(session, requestData)
 		if err != nil {
 			panic(err)
@@ -125,4 +133,39 @@ func createECSignature(val []byte) Signature {
 		panic(errors.New("failed encode signature: " + err.Error()))
 	}
 	return Signature{Value: encodedSig}
+}
+
+//Decrypt decrypts with RSA OAEP
+func Decrypt(c *gin.Context) {
+	keyID := c.Param("id")
+	requestData, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	log.WithFields(log.Fields{"id": keyID}).Info("Decrypt with key")
+	log.WithFields(log.Fields{"ciphertext": hex.EncodeToString(requestData)}).Debug("cipertext to decrypt")
+
+	label := "key-" + keyID
+	if handle, exists := keyHandles[label]; exists {
+		session, err := module.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION)
+		if err != nil {
+			panic(err)
+		}
+		defer module.CloseSession(session)
+		params := pkcs11.NewOAEPParams(pkcs11.CKM_SHA_1, pkcs11.CKG_MGF1_SHA1, pkcs11.CKZ_DATA_SPECIFIED, nil)
+		err = module.DecryptInit(session, []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP, params)}, handle)
+		if err != nil {
+			panic(err)
+		}
+		plaintext, err := module.Decrypt(session, requestData)
+		if err != nil {
+			panic(err)
+		}
+		log.WithFields(log.Fields{"value": hex.EncodeToString(plaintext)}).Debug("plaintext")
+
+		c.JSON(http.StatusOK, Plaintext{Value: plaintext})
+	} else {
+		c.Status(http.StatusNotFound)
+	}
 }

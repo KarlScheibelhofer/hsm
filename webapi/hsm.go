@@ -44,6 +44,7 @@ func setupRouter() *gin.Engine {
 	router.DELETE("/keys/:id", keys.DeleteKey)
 
 	router.POST("/hsm/:id/sign", p11.Sign)
+	router.POST("/hsm/:id/decrypt", p11.Decrypt)
 
 	return router
 }
