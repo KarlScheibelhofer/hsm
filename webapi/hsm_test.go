@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/karlscheibelhofer/hsm/keys"
@@ -34,7 +35,9 @@ var schemaGeneratedKey string = `{
 func TestSuite(t *testing.T) {
 	// <setup code>
 	// start HTTP server on random free port
-	testServer, err := StartHTTPServer(":0")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	testServer, err := StartHTTPServer(":0", &wg)
 	if err != nil {
 		t.Fatal(err)
 	}

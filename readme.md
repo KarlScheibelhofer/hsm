@@ -4,7 +4,8 @@ This is a web API to access HSMs using PKCS#11.
 
 Written in Go.
 
-Install PKCS#11 module softhsm2 (Ubuntu 20.04)
+Install PKCS#11 module [softhsm2](https://github.com/opendnssec/SoftHSMv2).
+We work on Ubuntu 20.04 (wsl2)
 
 Initialize Tokens
 ```

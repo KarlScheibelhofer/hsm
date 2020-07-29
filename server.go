@@ -27,7 +27,6 @@ func StartHTTPServer(address string, router *gin.Engine, wg *sync.WaitGroup) (*h
 	httpServer := HTTPServer(effectiveAddress, router)
 
 	go func() {
-
 		defer wg.Done()
 		log.Debug("starting HTTP server at address ", effectiveAddress)
 		httpServer.Serve(listener)

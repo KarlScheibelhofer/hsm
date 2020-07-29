@@ -15,12 +15,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var wg sync.WaitGroup
 var router *gin.Engine
 
 func init() {
-	wg.Add(2)
-
 	// Log as JSON instead of the default ASCII formatter.
 	log.SetFormatter(&log.JSONFormatter{TimestampFormat: time.RFC3339Nano})
 
@@ -51,19 +48,24 @@ func setupRouter() *gin.Engine {
 
 // StartHTTPServer starts the HTTP server listening on the specified interface:port.
 // Set ":0" to listen on an arbitrary free port, which you can get
-func StartHTTPServer(address string) (*http.Server, error) {
-	return hsm.StartHTTPServer(address, router, &wg)
+func StartHTTPServer(address string, wg *sync.WaitGroup) (*http.Server, error) {
+	return hsm.StartHTTPServer(address, router, wg)
 }
 
 // StartHTTPSServer starts the HTTPS server listening on the specified interface:port.
 // Set ":0" to listen on an arbitrary free port, which you can get
-func StartHTTPSServer(address string) (*http.Server, error) {
-	return hsm.StartHTTPSServer(address, router, &wg)
+func StartHTTPSServer(address string, wg *sync.WaitGroup) (*http.Server, error) {
+	return hsm.StartHTTPSServer(address, router, wg)
 }
 
 func main() {
+	var wg sync.WaitGroup
+
+	// 2 because we start HTTP and HTTPS server which both call Done
+	wg.Add(2)
+
 	// start plain HTTP (for development/debugging)
-	httpServer, err := StartHTTPServer(":8080")
+	httpServer, err := StartHTTPServer(":8080", &wg)
 	if err != nil {
 		log.Fatal("unable to open listener", err)
 		panic(err)
@@ -72,7 +74,7 @@ func main() {
 	log.Info("HTTP server listening at address ", httpServer.Addr)
 
 	// start strict HTTPS (for production)
-	httpsServer, err := StartHTTPSServer(":8443")
+	httpsServer, err := StartHTTPSServer(":8443", &wg)
 	if err != nil {
 		log.Fatal("unable to open listener", err)
 		panic(err)
