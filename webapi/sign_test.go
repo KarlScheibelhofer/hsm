@@ -39,7 +39,8 @@ func TestSuiteSign(t *testing.T) {
 	test = baloo.New("http://" + serverAddress)
 	test.Use(logger.New(os.Stdout))
 
-	t.Run("Sign", SubTestSign)
+	t.Run("SignECDSA", SubTestSignECDSA)
+	t.Run("SignRSA", SubTestSignRSA)
 
 	// <tear-down cod
 }
@@ -93,8 +94,27 @@ func assertSignatureValid(data []byte) func(res *http.Response, req *http.Reques
 	return f
 }
 
-func SubTestSign(t *testing.T) {
+func SubTestSignECDSA(t *testing.T) {
 	keyID := "1"
+	resourcePath := "/hsm/" + keyID + "/sign"
+
+	var data []byte = []byte{
+		0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0x0, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+		0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0x0, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+	}
+
+	hash := sha256.Sum256(data)
+
+	test.Post(resourcePath).
+		Body(bytes.NewReader(hash[:])).
+		Expect(t).
+		Status(200).
+		AssertFunc(assertSignatureValid(data)).
+		Done()
+}
+
+func SubTestSignRSA(t *testing.T) {
+	keyID := "rsa"
 	resourcePath := "/hsm/" + keyID + "/sign"
 
 	var data []byte = []byte{
