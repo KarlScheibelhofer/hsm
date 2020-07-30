@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/miekg/pkcs11"
@@ -36,13 +37,22 @@ func Sign(c *gin.Context) {
 	log.WithFields(log.Fields{"hash": hex.EncodeToString(requestData)}).Debug("hash to sign")
 
 	label := "key-" + keyID
-	if handle, exists := keyHandles[label]; exists {
+	if key, exists := keyMap[label]; exists {
 		session, err := module.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION)
 		if err != nil {
 			panic(err)
 		}
 		defer module.CloseSession(session)
-		err = module.SignInit(session, []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA, nil)}, handle)
+		var mechansim *pkcs11.Mechanism
+		switch key.keyType {
+		case pkcs11.CKK_EC:
+			mechansim = pkcs11.NewMechanism(pkcs11.CKM_ECDSA, nil)
+		case pkcs11.CKK_RSA:
+			mechansim = pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS, nil)
+		default:
+			panic(errors.New("unsupported key type " + strconv.FormatUint(key.keyType, 16)))
+		}
+		err = module.SignInit(session, []*pkcs11.Mechanism{mechansim}, key.privKeyHandle)
 		if err != nil {
 			panic(err)
 		}
@@ -52,11 +62,33 @@ func Sign(c *gin.Context) {
 		}
 		log.WithFields(log.Fields{"value": hex.EncodeToString(sigVal)}).Debug("signature")
 
-		sig := createECSignature(sigVal)
+		var encodedSig []byte
+		if mechansim.Mechanism == pkcs11.CKM_ECDSA {
+			encodedSig, err = encodeECSignature(sigVal)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			encodedSig = sigVal
+		}
+		sig := Signature{Value: encodedSig}
 		c.JSON(http.StatusOK, sig)
 	} else {
 		c.Status(http.StatusNotFound)
 	}
+}
+
+func encodeECSignature(val []byte) ([]byte, error) {
+	// split value into two halves r and s
+	len := len(val)
+	r, s := val[:len/2], val[len/2:]
+	log.WithFields(log.Fields{"r": hex.EncodeToString(r), "s": hex.EncodeToString(s)}).Info("signature")
+	ecSig := ECSignature{R: new(big.Int).SetBytes(r), S: new(big.Int).SetBytes(s)}
+	encodedSig, err := asn1.Marshal(ecSig)
+	if err != nil {
+		return nil, errors.New("failed encode signature: " + err.Error())
+	}
+	return encodedSig, nil
 }
 
 func createECSignature(val []byte) Signature {

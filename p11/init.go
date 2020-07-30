@@ -1,6 +1,7 @@
 package p11
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/miekg/pkcs11"
@@ -9,7 +10,15 @@ import (
 var module *pkcs11.Ctx
 var slot uint
 var globalSession pkcs11.SessionHandle
-var keyHandles map[string]pkcs11.ObjectHandle
+
+//Key holde handles for PKCS#11 and the type info
+type Key struct {
+	privKeyHandle pkcs11.ObjectHandle
+	pubKeyHandle  pkcs11.ObjectHandle
+	keyType       uint64
+}
+
+var keyMap map[string]Key
 
 //initialize the pkcs#11 module, open one session and login, search for keys
 func init() {
@@ -40,26 +49,44 @@ func init() {
 	}
 	// defer module.Logout(globalSession)
 
-	keyHandles = make(map[string]pkcs11.ObjectHandle)
+	keyMap = make(map[string]Key)
 
+	err = findKeys(keyMap)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func findKeys(keyMap map[string]Key) error {
 	module.FindObjectsInit(globalSession, []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
 	})
 	objs, _, err := module.FindObjects(globalSession, 100)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	for _, handle := range objs {
-		attrs, err := module.GetAttributeValue(globalSession, handle, []*pkcs11.Attribute{
+	for _, keyHandle := range objs {
+		attrs, err := module.GetAttributeValue(globalSession, keyHandle, []*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil),
+			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, nil),
 		})
 		if err != nil {
-			panic(err)
+			return err
 		}
 		label := string(attrs[0].Value)
-		keyHandles[label] = handle
-		fmt.Printf("Object: %d, Label: %s", handle, attrs[0].Value)
+		keyType := binary.LittleEndian.Uint64(attrs[1].Value)
+		key := Key{
+			privKeyHandle: keyHandle,
+			pubKeyHandle:  0,
+			keyType:       keyType,
+		}
+		keyMap[label] = key
+		fmt.Printf("Object: %d, Label: %s, Type: %X", keyHandle, label, keyType)
 	}
-	module.FindObjectsFinal(globalSession)
+	err = module.FindObjectsFinal(globalSession)
+	if err != nil {
+		return err
+	}
+	return nil
 }
