@@ -44,8 +44,8 @@ func TestSuiteDecrypt(t *testing.T) {
 	// <tear-down cod
 }
 
-func encryptData(plaintext []byte) ([]byte, error) {
-	pemEncodedKey, err := ioutil.ReadFile("../key-2-rsa-2048-public.pem")
+func encryptData(keyID string, plaintext []byte) ([]byte, error) {
+	pemEncodedKey, err := ioutil.ReadFile("../key-" + keyID + "-public.pem")
 	if err != nil {
 		return nil, errors.New("failed to read key file: " + err.Error())
 	}
@@ -90,7 +90,7 @@ func SubTestDecrypt(t *testing.T) {
 		0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0x0, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
 	}
 
-	ciphertext, err := encryptData(plaintext)
+	ciphertext, err := encryptData(keyID, plaintext)
 	if err != nil {
 		t.Error("preparing encrypted data failed " + err.Error())
 	}
